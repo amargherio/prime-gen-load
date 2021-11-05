@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "prime-sieve",
+    "pod-generator",
+    "instance-service",
+    "shared-lib"
+]
