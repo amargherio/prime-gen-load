@@ -1,11 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-use actix_web::{App, FromRequest, HttpRequest, HttpResponse, HttpServer, web};
-use futures::StreamExt;
-use json::JsonValue;
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, web};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tracing::{span, Level};
 use tracing_actix_web::TracingLogger;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -25,17 +21,27 @@ struct Worker {
     result: Option<Vec<i32>>,
 }
 
+#[derive(Debug, Clone)]
+struct AppData {
+    sieve_map: HashMap<String, Worker>
+}
+
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     // init tracing logging
+    tracing_subscriber::fmt::init();
 
     // init datastore for instance service
-    let mut store = HashMap::<String, Worker>::new();
+    let hmap: HashMap<String, Worker> = HashMap::new();
+    //let mut store = Arc::new(Mutex::new(hmap));
+    let store = web::Data::new(Mutex::new(AppData {
+        sieve_map: hmap,
+    }));
 
     HttpServer::new(move || {
     App::new()
-        .app_data(web::Data::new(store.clone()))
+        .app_data(store.clone())
         // logging
         .wrap(TracingLogger::default())
         .route("/register", web::post().to(register_sieve))
@@ -49,28 +55,31 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[tracing::instrument(skip(sieve))]
-async fn register_sieve(store: web::Data<HashMap<String, Worker>>, sieve: web::Form<Sieve>) -> HttpResponse {
+async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve>) -> HttpResponse {
     let worker = Worker { id: sieve.id.clone(), result: None };
+    let id = sieve.id.clone();
 
-    let mut mut_store = store.into_inner();
-
-    let hstore = Arc::get_mut(&mut mut_store).unwrap();
-    hstore.insert(sieve.id.clone(), worker);
+    let mut hstore = store.try_lock().unwrap();
+    let mut hmap = &mut hstore.sieve_map;
+        
+    tracing::debug!("Inserting ID '{}' and worker {:?} into hstore", id, worker);
+    hmap.insert(id, worker);
 
 
     HttpResponse::Created().finish()
 }
 
-#[tracing::instrument]
-async fn save_result(store: web::Data<HashMap<String, Worker>>, payload: web::Form<SieveResult>) -> HttpResponse {
-    let mut store = store.into_inner();
-    let hstore = Arc::get_mut(&mut store).unwrap();
+#[tracing::instrument(skip(payload))]
+async fn save_result(store: web::Data<Mutex<AppData>>, payload: web::Json<SieveResult>) -> HttpResponse {
+    let mut hstore = store.try_lock().unwrap();
+    let mut hmap = &mut hstore.sieve_map;
 
-    match hstore.get(&payload.id) {
-        Some(w) => {
-            let mut worker_obj = w.clone();
-            worker_obj.result = Some(payload.primes.clone());
-            hstore.insert(payload.id.clone(), worker_obj);
+    tracing::info!("Received result from worker {} with primes length {}", &payload.id, &payload.primes.len());
+
+    match hmap.get(&payload.id) {
+        Some(_) => {
+            tracing::debug!("Updating results for worker record and saving to store");
+            hmap.entry(payload.id.clone()).and_modify(|wo| { wo.result = Some(payload.primes.clone()) });
         },
         None => {
             tracing::warn!("Received results payload from worker {} that was not previously registered.", payload.id);
@@ -78,7 +87,7 @@ async fn save_result(store: web::Data<HashMap<String, Worker>>, payload: web::Fo
                 id: payload.id.clone(),
                 result: Some(payload.primes.clone())
             };
-            hstore.insert(payload.id.clone(), worker);
+            hmap.insert(payload.id.clone(), worker);
         },
     }
 
