@@ -17,6 +17,7 @@ struct WorkloadConfig {
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     // init tracing logging
+    tracing_subscriber::fmt::init();
 
     HttpServer::new(move || {
     App::new()
