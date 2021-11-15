@@ -152,6 +152,12 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                 "spec": {
                     "containers": [
                         {
+                            "env": [
+                                {
+                                    "name": "RUST_LOG",
+                                    "value": "info"
+                                }
+                            ],
                             "name": "instance-service",
                             "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0",
                             "livenessProbe": {
