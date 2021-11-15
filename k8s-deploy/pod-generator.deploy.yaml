@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-generator
+spec:
+  selector:
+    matchLabels:
+      app: pod-generator
+  template:
+    metadata:
+      labels:
+        app: pod-generator
+    spec:
+      containers:
+      - env:
+          - name: RUST_LOG
+            value: info
+        name: pod-generator
+        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8080
