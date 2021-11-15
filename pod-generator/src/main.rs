@@ -1,12 +1,9 @@
-use actix_web::{App, Error, HttpRequest, HttpResponse, HttpServer, error, http::StatusCode, middleware, web};
-use futures::StreamExt;
-use json::JsonValue;
+use actix_web::{App, HttpResponse, HttpServer, web};
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::{Namespace, Pod, Service}};
 use kube::{Api, Client, api::PostParams};
 use rand::{Rng, distributions::Alphanumeric, thread_rng};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::{span, Level};
 use tracing_actix_web::TracingLogger;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -67,7 +64,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
             }
             return HttpResponse::InternalServerError().finish();
         },
-        Err(e) => {
+        Err(_e) => {
             unimplemented!()
         }
     }
@@ -102,7 +99,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
         })).unwrap();
 
         match pod_api.create(&PostParams::default(), &pod_def).await {
-            Ok(p) => {
+            Ok(_) => {
                 tracing::debug!("Created new pod {} in namespace {}", format!("prime-sieve-instance-{}", n), target_ns);
             },
             Err(kube::Error::Api(ae)) => {
@@ -117,7 +114,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                 }
                 return HttpResponse::InternalServerError().finish();
             },
-            Err(e) => {
+            Err(_e) => {
                 unimplemented!()
             }
         }
@@ -157,11 +154,40 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                         {
                             "name": "instance-service",
                             "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0",
+                            "livenessProbe": {
+                                "failureThreshold": 5,
+                                "httpGet": {
+                                    "path": "/health",
+                                    "port": 8080,
+                                    "scheme": "HTTP"
+                                }
+                            },
                             "ports": [
                                 {
                                     "containerPort": 8080
                                 }
-                            ]
+                            ],
+                            "readinessProbe": {
+                                "failureThreshold": 5,
+                                "httpGet": {
+                                    "path": "/health",
+                                    "port": 8080,
+                                    "scheme": "HTTP"
+                                },
+                                "periodSeconds": 30,
+                                "successThreshold": 1,
+                                "timeoutSeconds": 5
+                            },
+                            "resources": {
+                                "limits": {
+                                    "cpu": "500m",
+                                    "memory": "500Mi"
+                                },
+                                "requests": {
+                                    "cpu": "100m",
+                                    "memory": "250Mi"
+                                }
+                            }
                         }
                     ]
                 }
@@ -191,7 +217,6 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
             ]
         }
     })).unwrap();
-    let params = PostParams::default();
 
     match deploy_api.create(&PostParams::default(), &dep).await {
         Ok(_) => {
