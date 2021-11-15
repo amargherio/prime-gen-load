@@ -96,7 +96,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-generator:0.1.0-1",
+                        "image": "amartest.azurecr.io/apps/slb/prime-generator:0.1.0-2",
                         "name": "prime-generator"
                     }
                 ],
@@ -165,7 +165,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-1",
+                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-2",
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {
