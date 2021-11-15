@@ -90,6 +90,12 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
             "spec": {
                 "containers": [
                     {
+                        "env": [
+                            {
+                                "name": "RUST_LOG",
+                                "value": "info"
+                            }
+                        ],
                         "image": "amartest.azurecr.io/apps/slb/prime-generator:0.1.0",
                         "name": "prime-generator"
                     }
