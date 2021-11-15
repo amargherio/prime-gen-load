@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         .wrap(TracingLogger::default())
         .route("/init", web::put().to(init_workload))
     })
-    .bind("127.0.0.1:8080")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await?;
 
@@ -258,6 +258,8 @@ async fn gen_target_ns() -> anyhow::Result<String> {
     .take(8)
     .map(char::from)
     .collect::<String>();
+    
+    let ns = ns.as_str().to_ascii_lowercase();
 
     Ok(ns)
 }
