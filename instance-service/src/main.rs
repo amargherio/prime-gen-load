@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .wrap(TracingLogger::default())
         .route("/register", web::post().to(register_sieve))
         .route("/result", web::put().to(save_result))
+        .route("/health", web::get().to(health_check))
     })
     .bind("127.0.0.1:8080")?
     .run()
@@ -91,5 +92,10 @@ async fn save_result(store: web::Data<Mutex<AppData>>, payload: web::Json<SieveR
         },
     }
 
+    HttpResponse::Ok().finish()
+}
+
+#[tracing::instrument]
+async fn health_check() -> HttpResponse {
     HttpResponse::Ok().finish()
 }
