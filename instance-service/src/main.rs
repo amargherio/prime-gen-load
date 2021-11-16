@@ -1,6 +1,7 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, sync::{Arc, Mutex}, thread::sleep, time::Duration};
 
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, web};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 
@@ -31,6 +32,10 @@ struct AppData {
 async fn main() -> anyhow::Result<()> {
     // init tracing logging
     tracing_subscriber::fmt::init();
+    tracing::info!("Introducing a slight delay to represent establishing database connections and other operations.");
+    let dur = rand::thread_rng().gen_range(10000..=250000);
+    sleep(Duration::from_millis(dur));
+
 
     // init datastore for instance service
     let hmap: HashMap<String, Worker> = HashMap::new();
@@ -65,7 +70,8 @@ async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve
         
     tracing::debug!("Inserting ID '{}' and worker {:?} into hstore", id, worker);
     hmap.insert(id, worker);
-
+    let dur = rand::thread_rng().gen_range(10000..=250000);
+    sleep(Duration::from_millis(dur));
 
     HttpResponse::Created().finish()
 }
@@ -81,6 +87,10 @@ async fn save_result(store: web::Data<Mutex<AppData>>, payload: web::Json<SieveR
         Some(_) => {
             tracing::debug!("Updating results for worker record and saving to store");
             hmap.entry(payload.id.clone()).and_modify(|wo| { wo.result = Some(payload.primes.clone()) });
+            
+            tracing::debug!("Sleeping for a short duration to simulate database transactions.");
+            let dur = rand::thread_rng().gen_range(475..=1500);
+            sleep(Duration::from_millis(dur));
         },
         None => {
             tracing::warn!("Received results payload from worker {} that was not previously registered.", payload.id);
@@ -89,6 +99,10 @@ async fn save_result(store: web::Data<Mutex<AppData>>, payload: web::Json<SieveR
                 result: Some(payload.primes.clone())
             };
             hmap.insert(payload.id.clone(), worker);
+            
+            tracing::debug!("Sleeping for a short duration to simulate database transactions.");
+            let dur = rand::thread_rng().gen_range(475..=1500);
+            sleep(Duration::from_millis(dur));
         },
     }
 

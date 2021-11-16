@@ -165,7 +165,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-2",
+                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-3",
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {
