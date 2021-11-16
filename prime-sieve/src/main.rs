@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::debug!("Creating HTTP client to interact with instance service");
     let client = reqwest::Client::new();
-    let resp: Response = client.post("http://instance-service-headless/register")
+    let resp: Response = client.post("http://instance-service-headless:8080/register")
         .header("content-type", "application/json")
         .json(&register)
         .send()
@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
         id: sieve_id.clone(),
         primes: res
     };
-    let prime_res = client.put("http://instance-service-headless/result")
+    let prime_res = client.put("http://instance-service-headless:8080/result")
         .header("content-type", "application/json")
         .json(&result_payload)
         .send()
