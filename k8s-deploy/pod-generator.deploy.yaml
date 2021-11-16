@@ -16,7 +16,7 @@ spec:
           - name: RUST_LOG
             value: info
         name: pod-generator
-        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-3
+        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-8
         resources:
           limits:
             memory: "128Mi"

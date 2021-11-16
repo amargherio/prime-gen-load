@@ -35,7 +35,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
     // create the initial Kube API client and create the target namespace for the workload (randomly-generated name used)
     let client = Client::try_default().await.unwrap();
     let target_ns = gen_target_ns().await.unwrap();
-    tracing::debug!("Generated namespace value {}", target_ns);
+    tracing::info!("Generated namespace value {}", target_ns);
     let ns_api: Api<Namespace> = Api::all(client.clone());
 
     let ns: Namespace = serde_json::from_value(json!({
@@ -73,13 +73,13 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
         tracing::warn!("Received request to spin up zero or a negative pod count - returning.");
         return HttpResponse::BadRequest().finish();
     }
-    tracing::debug!("Spinning up {} pods to calculate primes via sieve.", workload.count);
+    tracing::info!("Spinning up {} pods to calculate primes via sieve.", workload.count);
 
     deploy_instance_service(client.clone(), &target_ns).await;
 
     let pod_api: Api<Pod> = Api::namespaced(client.clone(), &target_ns);
     
-    for n in 0..=workload.count {
+    for n in 0..workload.count {
         let pod_def: Pod = serde_json::from_value(json!({
             "apiVersion": "v1",
             "kind": "Pod",
@@ -96,13 +96,15 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-generator:0.1.0-2",
+                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-3",
                         "name": "prime-generator"
                     }
                 ],
+                "restartPolicy": "Never"
 
             }
         })).unwrap();
+        tracing::debug!("Generated sieve pod spec: {:#?}", pod_def);
 
         match pod_api.create(&PostParams::default(), &pod_def).await {
             Ok(_) => {
@@ -120,8 +122,8 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                 }
                 return HttpResponse::InternalServerError().finish();
             },
-            Err(_e) => {
-                unimplemented!()
+            Err(e) => {
+                tracing::error!("Unhandled error encountered: {:#?}", e);
             }
         }
     }
@@ -216,9 +218,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
         "spec": {
             "clusterIP": "None",
             "selector": {
-                "matchLabels": {
-                    "app": "instance-service"
-                }
+                "app": "instance-service"
             },
             "ports": [
                 {
@@ -234,8 +234,19 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
         Ok(_) => {
             tracing::debug!("Created instance service deployment in target namesace '{}'", target_ns);
         },
-        Err(_) => {
-            todo!()
+        Err(kube::Error::Api(ae)) => {
+            // handle kubernetes specific errors here. this will most likely result in death
+            // but needs more specific handling
+            if ae.code == 401 {
+                tracing::error!("Received an unauthorized response from the API server when creating namespace {}", target_ns);
+            } else if ae.code == 429 {
+                tracing::warn!("Received throttled response from API server - message: {}", ae.message);
+            } else {
+                tracing::warn!("Error occurred while attempting to interact with the API server. Status: {}, message: {}", ae.status, ae.message);
+            }
+        },
+        Err(e) => {
+            tracing::error!("Unhandled error encountered: {:#?}", e);
         }
     }
 
@@ -243,8 +254,19 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
         Ok(_) => {
             tracing::debug!("Created headless service in target namespace '{}'", target_ns)
         },
-        Err(_) => {
-            todo!()
+        Err(kube::Error::Api(ae)) => {
+            // handle kubernetes specific errors here. this will most likely result in death
+            // but needs more specific handling
+            if ae.code == 401 {
+                tracing::error!("Received an unauthorized response from the API server when creating namespace {}", target_ns);
+            } else if ae.code == 429 {
+                tracing::warn!("Received throttled response from API server - message: {}", ae.message);
+            } else {
+                tracing::warn!("Error occurred while attempting to interact with the API server. Status: {}, message: {}", ae.status, ae.message);
+            }
+        },
+        Err(e) => {
+            tracing::error!("Unhandled error encountered: {:#?}", e);
         }
     }
 }
