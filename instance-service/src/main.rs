@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     // init tracing logging
     tracing_subscriber::fmt::init();
     tracing::info!("Introducing a slight delay to represent establishing database connections and other operations.");
-    let dur = rand::thread_rng().gen_range(10000..=250000);
+    let dur = rand::thread_rng().gen_range(1750..=5250);
     sleep(Duration::from_millis(dur));
 
 
@@ -70,7 +70,7 @@ async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve
         
     tracing::debug!("Inserting ID '{}' and worker {:?} into hstore", id, worker);
     hmap.insert(id, worker);
-    let dur = rand::thread_rng().gen_range(2000..=5500);
+    let dur = rand::thread_rng().gen_range(400..=1000);
     sleep(Duration::from_millis(dur));
 
     HttpResponse::Created().finish()
