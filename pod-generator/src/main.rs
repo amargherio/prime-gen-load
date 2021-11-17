@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use actix_web::{App, HttpResponse, HttpServer, web};
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::{Namespace, Pod, Service}};
 use kube::{Api, Client, api::PostParams};
@@ -78,6 +80,9 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
     deploy_instance_service(client.clone(), &target_ns).await;
 
     let pod_api: Api<Pod> = Api::namespaced(client.clone(), &target_ns);
+
+    let dur = rand::thread_rng().gen_range(5000..=7000);
+    sleep(Duration::from_millis(dur));
     
     for n in 0..workload.count {
         let pod_def: Pod = serde_json::from_value(json!({
@@ -167,7 +172,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-3",
+                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-4",
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {

@@ -70,7 +70,7 @@ async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve
         
     tracing::debug!("Inserting ID '{}' and worker {:?} into hstore", id, worker);
     hmap.insert(id, worker);
-    let dur = rand::thread_rng().gen_range(10000..=250000);
+    let dur = rand::thread_rng().gen_range(2000..=5500);
     sleep(Duration::from_millis(dur));
 
     HttpResponse::Created().finish()
