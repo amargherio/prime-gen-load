@@ -29,6 +29,9 @@ async fn main() -> anyhow::Result<()> {
         id: sieve_id.clone(),
     };
 
+    tracing::debug!("Going to sleep for 40 seconds in an attempt to allow instance-service to come up. Waiting 45 seconds");
+    sleep(Duration::from_millis(45000)).await;
+
     tracing::debug!("Creating HTTP client to interact with instance service");
     let client = reqwest::Client::new();
     let resp: Response = client.post("http://instance-service-headless:8080/register")

@@ -101,7 +101,8 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-3",
+                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-4",
+                        "imagePullPolicy": "Always",
                         "name": "prime-generator"
                     }
                 ],
