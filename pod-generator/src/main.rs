@@ -82,6 +82,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
     let pod_api: Api<Pod> = Api::namespaced(client.clone(), &target_ns);
 
     let dur = rand::thread_rng().gen_range(5000..=7000);
+    tracing::debug!("Sleeping for {} milliseconds to give instance service a chance to start.", dur);
     sleep(Duration::from_millis(dur));
     
     for n in 0..workload.count {
@@ -101,9 +102,19 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-4",
+                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-5",
                         "imagePullPolicy": "Always",
-                        "name": "prime-generator"
+                        "name": "prime-generator",
+                        "resources": {
+                            "limits": {
+                                "cpu": "500m",
+                                "memory": "100Mi"
+                            },
+                            "requests": {
+                                "cpu": "100m",
+                                "memory": "50Mi"
+                            }
+                        }
                     }
                 ],
                 "restartPolicy": "Never"
@@ -132,7 +143,11 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                 tracing::error!("Unhandled error encountered: {:#?}", e);
             }
         }
+
+        tracing::debug!("Brief sleep (150ms) before next pod creation");
+        sleep(Duration::from_millis(150));
     }
+    tracing::info!("Completed spin up of instance service and {} sieve pods.", workload.count);
 
     HttpResponse::Ok().finish()
 }
@@ -173,7 +188,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-4",
+                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-5",
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {
