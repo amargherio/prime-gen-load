@@ -1,9 +1,10 @@
-use std::time::Duration;
+use std::{net::IpAddr, time::Duration};
 
 use rand::Rng;
 use reqwest::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use trust_dns_resolver::{Resolver, config::{ResolverConfig, ResolverOpts}, proto::rr::RData};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RegisterPayload {
@@ -29,9 +30,20 @@ async fn main() -> anyhow::Result<()> {
         id: sieve_id.clone(),
     };
 
-    tracing::debug!("Going to sleep for 40 seconds in an attempt to allow instance-service to come up. Waiting 45 seconds");
-    sleep(Duration::from_millis(45000)).await;
+    sleep(Duration::from_millis(5000)).await;
 
+    // test DNS resolution twice for instance service and then proceed
+    match query_until_dns_ready().await {
+        Ok(()) => {},
+        Err(e) => {
+            tracing::error!("Error occurred while attempting to query for instance service IP. Error: {:?}", e);
+        }
+    }
+
+    tracing::debug!("Going to sleep for 20 seconds in an attempt to allow instance-service to come up.");
+    sleep(Duration::from_millis(20000)).await;
+
+    // build http client and send the register request to instance service
     tracing::debug!("Creating HTTP client to interact with instance service");
     let client = reqwest::Client::new();
     let resp: Response = client.post("http://instance-service-headless:8080/register")
@@ -99,4 +111,23 @@ async fn basic_sieve(limit: usize) -> Box<dyn Iterator<Item = usize>> {
     Box::new(is_prime.into_iter()
         .enumerate()
         .filter_map(|(p, is_prime)| if is_prime { Some(p) } else { None }))
+}
+
+async fn query_until_dns_ready() -> anyhow::Result<()> {
+    let resolver = Resolver::from_system_conf().unwrap();
+
+    tracing::info!("Querying the DNS for 4 attempts - checking for IPs of instance service.");
+    for n in 1..=4 {
+        let res = resolver.lookup_ip("instance-service-headless").unwrap();
+        tracing::debug!("DNS response: {:#?}", res);
+        let answers: Vec<IpAddr> = res.iter().collect();
+        if answers.len() > 0 {
+            tracing::info!("Received DNS answer after {} tries - continuing with processing", n);
+            return Ok(());
+        }
+        tracing::debug!("No DNS results returned for this query - sleeping for 500ms and retrying.");
+        sleep(Duration::from_millis(500)).await;
+    }
+    tracing::warn!("No DNS response received in four attempts - continuing with processing.");
+    Ok(())
 }
