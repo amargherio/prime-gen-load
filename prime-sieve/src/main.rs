@@ -1,10 +1,11 @@
 use std::{net::IpAddr, time::Duration};
 
+use anyhow::anyhow;
 use rand::Rng;
 use reqwest::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
-use trust_dns_resolver::Resolver;
+use trust_dns_resolver::{AsyncResolver, Resolver};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RegisterPayload {
@@ -114,19 +115,28 @@ async fn basic_sieve(limit: usize) -> Box<dyn Iterator<Item = usize>> {
 }
 
 async fn query_until_dns_ready() -> anyhow::Result<()> {
-    let resolver = Resolver::from_system_conf().unwrap();
+    //let resolver = Resolver::from_system_conf().unwrap();
+    let resolver = AsyncResolver::tokio_from_system_conf().unwrap();
 
     tracing::info!("Querying the DNS for 4 attempts - checking for IPs of instance service.");
     for n in 1..=4 {
-        let res = resolver.lookup_ip("instance-service-headless").unwrap();
-        tracing::debug!("DNS response: {:#?}", res);
-        let answers: Vec<IpAddr> = res.iter().collect();
-        if answers.len() > 0 {
-            tracing::info!("Received DNS answer after {} tries - continuing with processing", n);
-            return Ok(());
+        let res = resolver.lookup_ip("instance-service-headless").await;
+        match res {
+            Ok(resp) => {
+                tracing::debug!("DNS response: {:#?}", resp);
+                let answers: Vec<IpAddr> = resp.iter().collect();
+                if answers.len() > 0 {
+                    tracing::info!("Received DNS answer after {} tries - continuing with processing", n);
+                    return Ok(());
+                } else {
+                    tracing::debug!("No DNS results returned query {} - sleeping for 500ms and retrying.", n);
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+            },
+            Err(e) => {
+                return Err(anyhow::Error::from(e));
+            }
         }
-        tracing::debug!("No DNS results returned for this query - sleeping for 500ms and retrying.");
-        sleep(Duration::from_millis(500)).await;
     }
     tracing::warn!("No DNS response received in four attempts - continuing with processing.");
     Ok(())
