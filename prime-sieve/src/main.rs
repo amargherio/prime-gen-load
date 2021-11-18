@@ -4,7 +4,7 @@ use rand::Rng;
 use reqwest::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
-use trust_dns_resolver::{Resolver, config::{ResolverConfig, ResolverOpts}, proto::rr::RData};
+use trust_dns_resolver::Resolver;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RegisterPayload {
