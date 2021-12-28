@@ -48,8 +48,9 @@ async fn main() -> anyhow::Result<()> {
     // build redis client and wrap it for use as data
     let redis_url = std::env::var("REDIS_URL")?;
     let redis_port = std::env::var("REDIS_PORT")?;
-    let redis_db = std::env::var("REDIS_DB")?;
-    let formatted_conn_string = format!("redis://{}:{}/{}", redis_url, redis_port, redis_db);
+    //let redis_db = std::env::var("REDIS_DB")?;
+    //let formatted_conn_string = format!("redis://{}:{}/{}", redis_url, redis_port, redis_db);
+    let formatted_conn_string = format!("redis://{}:{}/", redis_url, redis_port);
     tracing::debug!("Built formatted connection string for Redis - {}", formatted_conn_string);
 
     let client = redis::Client::open(formatted_conn_string.as_str())?;
