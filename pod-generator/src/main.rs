@@ -1,4 +1,4 @@
-use std::{thread::sleep, time::Duration};
+use std::{thread::sleep, time::Duration, collections::BTreeMap};
 
 use actix_web::{App, HttpResponse, HttpServer, web};
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::{Namespace, Pod, Service}};
@@ -40,13 +40,25 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
     tracing::info!("Generated namespace value {}", target_ns);
     let ns_api: Api<Namespace> = Api::all(client.clone());
 
-    let ns: Namespace = serde_json::from_value(json!({
+    let mut ns: Namespace = serde_json::from_value(json!({
         "apiVersion": "v1",
         "kind": "Namespace",
         "metadata": {
             "name": target_ns
         }
     })).unwrap();
+
+    match std::env::var("LINKERD_INJECT") {
+        Ok(val) => {
+            if val == "true" {
+                tracing::info!("Linkerd injection is enabled - adding the correct annotation.");
+                add_inject_annotation_to_ns(&mut ns);
+            }
+        },
+        Err(_) => {
+            tracing::warn!("'LINKERD_INJECT' variable not set - proceeding with workload init.");
+        }
+    }
     
     let ns_params = PostParams::default();
     match ns_api.create(&ns_params, &ns).await {
@@ -102,7 +114,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-5",
+                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-6",
                         "imagePullPolicy": "Always",
                         "name": "prime-generator",
                         "resources": {
@@ -152,6 +164,14 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
     HttpResponse::Ok().finish()
 }
 
+#[tracing::instrument(skip(ns))]
+fn add_inject_annotation_to_ns(ns: &mut Namespace) {
+    let mut annts: BTreeMap<String, String> = BTreeMap::new();
+    annts.insert(String::from("linkerd.io/inject"), String::from("enabled"));
+    ns.metadata.annotations = Some(annts);
+    tracing::debug!("Added 'linkerd.io/inject: enabled' to the namespace annotations.");
+}
+
 #[tracing::instrument(skip(client))]
 async fn deploy_instance_service(client: Client, target_ns: &str) {
     // create instance service deployment and headless service in cluster
@@ -185,10 +205,22 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 {
                                     "name": "RUST_LOG",
                                     "value": "info"
+                                },
+                                {
+                                    "name": "REDIS_URL",
+                                    "value": "localhost"
+                                },
+                                {
+                                    "name": "REDIS_PORT",
+                                    "value": 6379
+                                },
+                                {
+                                    "name": "REDIS_DB",
+                                    "value": "primes"
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-5",
+                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-6",
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {
@@ -213,6 +245,27 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 "successThreshold": 1,
                                 "timeoutSeconds": 5
                             },
+                            "resources": {
+                                "limits": {
+                                    "cpu": "500m",
+                                    "memory": "500Mi"
+                                },
+                                "requests": {
+                                    "cpu": "100m",
+                                    "memory": "250Mi"
+                                }
+                            }
+                        },
+                        {
+                            "name": "redis",
+                            "image": "redis:6.2.6",
+                            "ports": [
+                                {
+                                    "containerPort": 6379,
+                                    "name": "redis",
+                                    "protocol": "TCP"
+                                }
+                            ],
                             "resources": {
                                 "limits": {
                                     "cpu": "500m",

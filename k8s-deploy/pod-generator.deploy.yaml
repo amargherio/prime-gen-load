@@ -14,7 +14,9 @@ spec:
       containers:
       - env:
           - name: RUST_LOG
-            value: info
+            value: debug
+          - name: LINKERD_INJECT
+            value: "true"
         name: pod-generator
         image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-13
         resources:
