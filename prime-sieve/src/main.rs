@@ -128,8 +128,8 @@ async fn query_until_dns_ready() -> anyhow::Result<()> {
                     tracing::info!("Received DNS answer after {} tries - continuing with processing", n);
                     return Ok(());
                 } else {
-                    tracing::debug!("No DNS results returned query {} - sleeping for 500ms and retrying.", n);
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tracing::debug!("No DNS results returned query {} - sleeping for 2000ms and retrying.", n);
+                    tokio::time::sleep(Duration::from_millis(2000)).await;
                 }
             },
             Err(e) => {
