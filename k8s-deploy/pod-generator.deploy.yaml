@@ -18,7 +18,7 @@ spec:
           - name: LINKERD_INJECT
             value: "true"
         name: pod-generator
-        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-13
+        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-15
         resources:
           limits:
             memory: "128Mi"

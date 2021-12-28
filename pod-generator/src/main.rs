@@ -212,7 +212,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 },
                                 {
                                     "name": "REDIS_PORT",
-                                    "value": 6379
+                                    "value": "6379"
                                 },
                                 {
                                     "name": "REDIS_DB",
