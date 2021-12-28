@@ -1,11 +1,10 @@
 use std::{net::IpAddr, time::Duration};
 
-use anyhow::anyhow;
 use rand::Rng;
 use reqwest::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
-use trust_dns_resolver::{AsyncResolver, Resolver};
+use trust_dns_resolver::AsyncResolver;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RegisterPayload {
