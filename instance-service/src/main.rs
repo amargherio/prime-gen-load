@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Mutex, thread::sleep, time::Duration};
 
 use actix_web::{App, HttpResponse, HttpServer, web};
 use rand::Rng;
+use redis::Commands;
 use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 
@@ -19,12 +20,19 @@ struct SieveResult {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
 struct Worker {
     id: String,
-    result: Option<Vec<i32>>,
+    results: Option<PrimeResult>,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
+struct PrimeResult {
+    quantity: usize,
+    max_prime: i32,
 }
 
 #[derive(Debug, Clone)]
 struct AppData {
-    sieve_map: HashMap<String, Worker>
+    sieve_map: HashMap<String, Worker>,
+    redis: redis::Client,
 }
 
 
@@ -32,17 +40,26 @@ struct AppData {
 async fn main() -> anyhow::Result<()> {
     // init tracing logging
     tracing_subscriber::fmt::init();
-    tracing::info!("Mimicking database connection pool initialization and connections to messaging clients");
-    let dur = rand::thread_rng().gen_range(3000..=5250);
-    sleep(Duration::from_millis(dur));
 
     // init datastore for instance service
     let hmap: HashMap<String, Worker> = HashMap::new();
-    //let mut store = Arc::new(Mutex::new(hmap));
+    tracing::debug!("Completed hashmap creation for storing results.");
+
+    // build redis client and wrap it for use as data
+    let redis_url = std::env::var("REDIS_URL")?;
+    let redis_port = std::env::var("REDIS_PORT")?;
+    let redis_db = std::env::var("REDIS_DB")?;
+    let formatted_conn_string = format!("redis://{}:{}/{}", redis_url, redis_port, redis_db);
+    tracing::debug!("Built formatted connection string for Redis - {}", formatted_conn_string);
+
+    let client = redis::Client::open(formatted_conn_string.as_str())?;
+
     let store = web::Data::new(Mutex::new(AppData {
         sieve_map: hmap,
+        redis: client,
     }));
-    tracing::info!("Completed hashmap creation for storing results.");
+    tracing::info!("Build AppData object with HashMap for local storage and Redis client for remote data");
+
 
     HttpServer::new(move || {
     App::new()
@@ -62,11 +79,11 @@ async fn main() -> anyhow::Result<()> {
 
 #[tracing::instrument(skip(store))]
 async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve>) -> HttpResponse {
-    let worker = Worker { id: sieve.id.clone(), result: None };
+    let worker = Worker { id: sieve.id.clone(), results: None };
     let id = sieve.id.clone();
 
     let mut hstore = store.try_lock().unwrap();
-    let mut hmap = &mut hstore.sieve_map;
+    let hmap = &mut hstore.sieve_map;
         
     tracing::info!("Inserting ID '{}' and worker {:?} into hstore", id, worker);
     hmap.insert(id, worker);
@@ -79,30 +96,36 @@ async fn register_sieve(store: web::Data<Mutex<AppData>>, sieve: web::Json<Sieve
 #[tracing::instrument(skip(payload, store))]
 async fn save_result(store: web::Data<Mutex<AppData>>, payload: web::Json<SieveResult>) -> HttpResponse {
     let mut hstore = store.try_lock().unwrap();
-    let mut hmap = &mut hstore.sieve_map;
+    let hmap = &mut hstore.sieve_map;
 
     tracing::info!("Received result from worker {} with primes length {}", &payload.id, &payload.primes.len());
+    let prime_res = PrimeResult {
+        max_prime: payload.primes.get(payload.primes.len() - 1).unwrap().clone(),
+        quantity: payload.primes.len()
+    };
 
     match hmap.get(&payload.id) {
         Some(_) => {
             tracing::debug!("Updating results for worker record and saving to store");
-            hmap.entry(payload.id.clone()).and_modify(|wo| { wo.result = Some(payload.primes.clone()) });
+            hmap.entry(payload.id.clone()).and_modify(|wo| { wo.results = Some(prime_res.clone()) });
             
-            tracing::debug!("Sleeping for a short duration to simulate database transactions.");
-            let dur = rand::thread_rng().gen_range(475..=1500);
-            sleep(Duration::from_millis(dur));
+            // commit the max value to redis as well
+            let redis = &hstore.redis;
+            let mut con = redis.get_connection().unwrap();
+            let _:() = con.set(payload.id.clone(), prime_res.max_prime.clone()).unwrap();
         },
         None => {
             tracing::warn!("Received results payload from worker {} that was not previously registered.", payload.id);
             let worker = Worker {
                 id: payload.id.clone(),
-                result: Some(payload.primes.clone())
+                results: Some(prime_res.clone())
             };
             hmap.insert(payload.id.clone(), worker);
             
-            tracing::debug!("Sleeping for a short duration to simulate database transactions.");
-            let dur = rand::thread_rng().gen_range(475..=1500);
-            sleep(Duration::from_millis(dur));
+            // commit the max value to redis as well
+            let redis = &hstore.redis;
+            let mut con = redis.get_connection().unwrap();
+            let _:() = con.set(payload.id.clone(), prime_res.max_prime.clone()).unwrap();
         },
     }
 
