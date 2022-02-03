@@ -17,8 +17,14 @@ spec:
             value: debug
           - name: LINKERD_INJECT
             value: "true"
+          - name: INSTANCE_IMAGE
+            value: "instance-service-0.1.0-7"
+          - name: SIEVE_IMAGE
+            value: "prime-sieve-0.1.0-6"
+          - name: CONTAINER_REGISTRY_BASE_PATH
+            value: "amartest.azurecr.io/apps/slb"
         name: pod-generator
-        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-16
+        image: amartest.azurecr.io/apps/slb/pod-generator:0.1.0-17
         resources:
           limits:
             memory: "128Mi"

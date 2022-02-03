@@ -88,14 +88,22 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
         return HttpResponse::BadRequest().finish();
     }
     tracing::info!("Spinning up {} pods to calculate primes via sieve.", workload.count);
+    tracing::debug!("Retrieving image URL information from env vars and stashing the container registry URL for later use.");
+    let registry_url = std::env::var("CONTAINER_REGISTRY_BASE_PATH").unwrap();
+    let instance_image_tag = std::env::var("INSTANCE_IMAGE").unwrap();
+    let instance_image_url = format!("{}/{}", registry_url, instance_image_tag);
 
-    deploy_instance_service(client.clone(), &target_ns).await;
+    deploy_instance_service(client.clone(), &target_ns, &instance_image_url).await;
 
     let pod_api: Api<Pod> = Api::namespaced(client.clone(), &target_ns);
 
     let dur = rand::thread_rng().gen_range(5000..=7000);
     tracing::debug!("Sleeping for {} milliseconds to give instance service a chance to start.", dur);
     sleep(Duration::from_millis(dur));
+
+    // pull sieve image information from the environment for use in the deploy loop.
+    let sieve_image_tag = std::env::var("SIEVE_IMAGE").unwrap();
+    let sieve_image_url = format!("{}/{}", registry_url, sieve_image_tag);
     
     for n in 0..workload.count {
         let pod_def: Pod = serde_json::from_value(json!({
@@ -114,7 +122,7 @@ async fn init_workload(workload: web::Query<WorkloadConfig>) -> HttpResponse {
                                 "value": "info"
                             }
                         ],
-                        "image": "amartest.azurecr.io/apps/slb/prime-sieve:0.1.0-6",
+                        "image": sieve_image_url,
                         "imagePullPolicy": "Always",
                         "name": "prime-generator",
                         "resources": {
@@ -173,7 +181,7 @@ fn add_inject_annotation_to_ns(ns: &mut Namespace) {
 }
 
 #[tracing::instrument(skip(client))]
-async fn deploy_instance_service(client: Client, target_ns: &str) {
+async fn deploy_instance_service(client: Client, target_ns: &str, instance_image: &str) {
     // create instance service deployment and headless service in cluster
     let deploy_api: Api<Deployment> = Api::namespaced(client.clone(), target_ns);
     let service_api: Api<Service> = Api::namespaced(client.clone(), target_ns);
@@ -220,7 +228,7 @@ async fn deploy_instance_service(client: Client, target_ns: &str) {
                                 }
                             ],
                             "name": "instance-service",
-                            "image": "amartest.azurecr.io/apps/slb/instance-service:0.1.0-7",
+                            "image": instance_image,
                             "livenessProbe": {
                                 "failureThreshold": 5,
                                 "httpGet": {
